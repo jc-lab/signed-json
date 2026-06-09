@@ -3,6 +3,8 @@ package signature
 import (
 	"crypto"
 	"errors"
+	"log"
+	"strings"
 	"sync"
 )
 
@@ -55,6 +57,9 @@ func addEngine(engine Engine) {
 }
 
 func GetEngine(schema string) (Engine, error) {
+	if strings.HasPrefix(schema, "jclab-prs-2301") {
+		log.Printf("jclab-prs-2301 engine is UNSAFE, DO NOT USE IT!")
+	}
 	engine, ok := engineMap.Load(schema)
 	if !ok {
 		return nil, ErrInvalid
