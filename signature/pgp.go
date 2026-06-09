@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto"
 	"encoding/base64"
+
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/packet"
 )
@@ -36,6 +37,7 @@ type pgpSigner struct {
 	key       *openpgp.Entity
 	publicKey *pgpPublicKey
 	keyId     string
+	config    *packet.Config
 }
 
 type pgpVerifier struct {
@@ -44,6 +46,7 @@ type pgpVerifier struct {
 	key    *openpgp.Entity
 	keys   openpgp.EntityList
 	keyId  string
+	config *packet.Config
 }
 
 func ReadPgpArmorPrivateKey(input string) (crypto.PrivateKey, error) {
@@ -119,6 +122,10 @@ func (e *pgpEngine) KeyTypeByPrivateKey(key crypto.PrivateKey) (string, error) {
 }
 
 func (e *pgpEngine) NewSigner(key crypto.PrivateKey, keyId string) (Signer, error) {
+	return e.NewSignerWithConfig(key, keyId, nil)
+}
+
+func (e *pgpEngine) NewSignerWithConfig(key crypto.PrivateKey, keyId string, config *packet.Config) (Signer, error) {
 	pgpKey, ok := key.(*pgpPrivateKey)
 	if !ok {
 		return nil, ErrInvalidKey
@@ -132,6 +139,9 @@ func (e *pgpEngine) NewSigner(key crypto.PrivateKey, keyId string) (Signer, erro
 	if keyId == "" {
 		keyId = pgpKeyId(publicKey)
 	}
+	if config == nil {
+		config = &packet.Config{}
+	}
 
 	return &pgpSigner{
 		engine: e,
@@ -139,11 +149,16 @@ func (e *pgpEngine) NewSigner(key crypto.PrivateKey, keyId string) (Signer, erro
 		publicKey: &pgpPublicKey{
 			key: publicKey,
 		},
-		keyId: keyId,
+		keyId:  keyId,
+		config: config,
 	}, nil
 }
 
 func (e *pgpEngine) NewVerifier(key crypto.PublicKey, keyId string) (Verifier, error) {
+	return e.NewVerifierWithConfig(key, keyId, nil)
+}
+
+func (e *pgpEngine) NewVerifierWithConfig(key crypto.PublicKey, keyId string, config *packet.Config) (Verifier, error) {
 	pgpKey, ok := key.(*pgpPublicKey)
 	if !ok {
 		return nil, ErrInvalidKey
@@ -152,12 +167,16 @@ func (e *pgpEngine) NewVerifier(key crypto.PublicKey, keyId string) (Verifier, e
 	if keyId == "" {
 		keyId = pgpKeyId(pgpKey.key)
 	}
+	if config == nil {
+		config = &packet.Config{}
+	}
 
 	return &pgpVerifier{
 		engine: e,
 		key:    pgpKey.key,
 		keyId:  keyId,
 		keys:   []*openpgp.Entity{pgpKey.key},
+		config: config,
 	}, nil
 }
 
@@ -179,7 +198,7 @@ func (e *pgpSigner) KeyId() string {
 
 func (e *pgpSigner) SignMessage(msg []byte) ([]byte, error) {
 	var out bytes.Buffer
-	err := openpgp.DetachSign(&out, e.key, bytes.NewReader(msg), &packet.Config{})
+	err := openpgp.DetachSign(&out, e.key, bytes.NewReader(msg), e.config)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +223,7 @@ func (e *pgpVerifier) KeyId() string {
 }
 
 func (e *pgpVerifier) VerifyMessage(msg []byte, sig []byte) (bool, error) {
-	_, _, err := openpgp.VerifyDetachedSignature(e.keys, bytes.NewReader(msg), bytes.NewReader(sig), &packet.Config{})
+	_, _, err := openpgp.VerifyDetachedSignature(e.keys, bytes.NewReader(msg), bytes.NewReader(sig), e.config)
 	if err != nil {
 		return false, err
 	}

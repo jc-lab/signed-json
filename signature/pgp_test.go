@@ -2,11 +2,14 @@ package signature
 
 import (
 	"encoding/base64"
-	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
+
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
+	"github.com/stretchr/testify/assert"
 )
 
-var testingPgpEngine = NewPgpEngine()
+var testingPgpEngine = NewPgpEngine().(*pgpEngine)
 
 func Test_pgp_GetEngine(t *testing.T) {
 	engine, err := GetEngine("pgp")
@@ -46,10 +49,16 @@ func Test_pgpEngine_SignVerifyJson(t *testing.T) {
 	privateKey, err := ReadPgpArmorPrivateKey(testGpgRsaPrivateKey)
 	assert.Nil(t, err)
 
-	signer, err := testingPgpEngine.NewSigner(privateKey, "aaaa")
+	config := &packet.Config{
+		Time: func() time.Time {
+			return time.Unix(1704067200, 0)
+		},
+	}
+
+	signer, err := testingPgpEngine.NewSignerWithConfig(privateKey, "aaaa", config)
 	assert.Nil(t, err)
 
-	verifier, err := testingPgpEngine.NewVerifier(signer.PublicKey(), "aaaa")
+	verifier, err := testingPgpEngine.NewVerifierWithConfig(signer.PublicKey(), "aaaa", config)
 	assert.Nil(t, err)
 
 	commonJsonTest(t, signer, verifier, "VFjJlpA8bbOu-jd6gxS0JgDT2WY", "")
